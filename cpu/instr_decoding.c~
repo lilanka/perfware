@@ -1,0 +1,75 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+typedef unsigned int u32;
+typedef uint8_t u8;
+
+u8 buffer[2];
+
+static void read_file(const char* fname) {
+  FILE *ptr;
+
+  ptr = fopen(fname, "rb");
+  fread(buffer, sizeof(buffer), 1, ptr);
+}
+
+static void print_bits(u8 val) {
+  u8 i = 7;
+  while (i >= 0) {
+    printf("%c", (val & (1 << i)) ? '1' : '0');
+    if (i == 0) break; // tf, not stopping
+    i--;
+  }
+}
+
+static int what_is_d(u8 val) {
+  return (val >> 5) & 0x01 ? 1 : 0;
+}
+
+static int what_is_w(u8 val) {
+  return (val >> 6) & 0x01 ? 1 : 0;
+}
+
+static void disassemble() {
+  for (u32 i = 0; i < sizeof(buffer); ++i) {
+    print_bits(buffer[i]);
+    printf("\n");
+  }
+
+  int w = what_is_w(buffer[0]);
+  int b = what_is_d(buffer[0]);
+
+  switch (buffer[0] & 0xfc) { // Op
+  case 0x88: printf("mov"); break;
+  }
+
+  printf("\n");
+  print_bits(buffer[1]);
+  printf("\n");
+  print_bits(buffer[1] & 0x07);
+
+  switch (buffer[1] & 0xc0) { // MOD
+    case 0xc0: { // 11 
+      switch (buffer[1] & 0x7) { // R/M
+        case 0x0: w == 0 ? printf(" al, al") : printf(" ax, ax"); break;
+        case 0x1: w == 0 ? printf(" cl, cl") : printf(" cx, cx"); break;
+        case 0x2: w == 0 ? printf(" dl, dl") : printf(" dx, dx"); break;
+        case 0x3: w == 0 ? printf(" bl, bl") : printf(" bx, bx"); break;
+        case 0x4: w == 0 ? printf(" ah, ah") : printf(" sp, sp"); break;
+        case 0x5: w == 0 ? printf(" ch, ch") : printf(" bp, bp"); break;
+        case 0x6: w == 0 ? printf(" dh, dh") : printf(" si, si"); break;
+        case 0x7: w == 0 ? printf(" bh, bh") : printf(" di, di"); break;
+      } 
+      break;
+    }
+    case 0x0: { // 00
+      break;
+    }
+  }
+}
+
+int main(int argc, char *argv[]) {
+  read_file(argv[1]);
+  disassemble();
+}
