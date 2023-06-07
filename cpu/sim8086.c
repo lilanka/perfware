@@ -116,14 +116,14 @@ static MOD_TYPE RM(u8* lower, int* w) {
 	}
 }
 
-// TODO (Lilanka):
-static u8 hex_8_to_value(u8* value) {
-	return 10;
+// TODO (Lilanka): 
+static u8 hex_8_to_value(u8 value) {
+	return 12;
 } 
 
 // TODO (Lilanka):
-static u16 hex_16_to_value(u8* value1, u8* value2) {
-	return 11;
+static u16 hex_16_to_value(u8 value1, u8 value2) {
+	return 13;
 }
 
 static void disassemble() {
@@ -133,11 +133,28 @@ static void disassemble() {
 
 		u8 higher = buffer[byt];
 		u8 lower = buffer[byt + 1];
+		printf("|");
+		print_bits(higher);
+		printf("|");
+		print_bits(lower);
+		printf("|");
+		printf("%i", byt);
+		printf("|");
+
+		int is_add_or_mov = 0;
 
 		if ((higher & 0xf8) == 0x88) { // Register/memory to/from register
 			printf("mov");
+			is_add_or_mov = 1;
+		}
 
-			int w = what_is_w(higher, 0x01);
+		if ((higher & 0xfc) == 0x00) {
+			printf("add");
+			is_add_or_mov = 1;
+		}
+		
+		if (is_add_or_mov == 1) {		
+			int	w = what_is_w(higher, 0x01);
 			int d = what_is_d(higher);
 			u8 reg = (lower & 0x38) >> 3;
 			MOD_TYPE mod_type;
@@ -154,13 +171,13 @@ static void disassemble() {
 
 			if (mod_type == MOD_01) {
 				u8 second_lower = buffer[byt + 2];
-				u8 imm_value = hex_8_to_value(&second_lower);
+				u8 imm_value = hex_8_to_value(second_lower);
 				printf(" + %i]", imm_value);
 				byt++;
 			} else if (mod_type == MOD_10) {
 				u8 second_lower = buffer[byt + 2];
 				u8 third_lower = buffer[byt + 3];
-				u8 imm_value = hex_16_to_value(&second_lower, &third_lower);
+				u16 imm_value = hex_16_to_value(second_lower, third_lower);
 				printf(" + %i]", imm_value);
 				byt += 2;
 			} 
@@ -175,17 +192,32 @@ static void disassemble() {
 			if (w == 0) { // 8-bit
 				register_field_encoding(&reg, &w);
 				printf(",");
-				u8 imm_value = hex_8_to_value(&lower);
-				printf("%i", imm_value);
+				u8 imm_value = hex_8_to_value(lower);
+				printf(" %i", imm_value);
 				byt += 1;
 			}	else { // 16-bit
 				register_field_encoding(&reg, &w);
 				printf(",");
 				u8 second_lower = buffer[byt + 2];
-				u16 imm_value = hex_16_to_value(&lower, &second_lower);
-				printf("%i", imm_value);
+				u16 imm_value = hex_16_to_value(lower, second_lower);
+				printf(" %i", imm_value);
 				byt += 2;
 			}
+		}
+
+		else if ((higher & 0xfc) == 0x80) {
+			printf("add");
+			int	w = what_is_w(higher, 0x01);
+			u8 reg = (lower & 0x38) >> 3;
+
+			switch (reg) {
+			case 0x00:
+				break;
+			case 0x03:
+				break;
+			case 0x05:	
+				break;
+			}	
 		}
 		printf("\n");
 		byt++;
