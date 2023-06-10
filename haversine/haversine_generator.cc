@@ -3,7 +3,6 @@
 #include <random>
 
 #include "formula.cc"
-#include "xoshiro256starstar.cc"
 
 // Latitude range: [-90 - 90] (degrees)
 // Longitude range: [-180 - 180] (degrees)
@@ -17,11 +16,11 @@ struct Point {
 };
 
 // To hold two points
-struct DoublePoints {
+struct PointPairs {
 	f64 x0, y0, x1, y1;
 };
 
-static void write_on_file(DoublePoints *points, const u64 *number, const char *fname) {
+static void write_on_file(PointPairs *points, const u64 *number, const char *fname) {
 	FILE *file;
 	file = fopen(fname, "w");
 
@@ -37,16 +36,13 @@ static void write_on_file(DoublePoints *points, const u64 *number, const char *f
 	fprintf(file, "\n\t]\n\n}");
 }
 
-// Mersenne Twister method
 static void generate_single_point(const u64 *seed_value, Point *p) {
 	std::random_device rd;
 	std::mt19937 gen(rd());
 	std::normal_distribution<f64> d(0, 1);
 
 	f64 x, y, z, dis;
-	x = d(gen);
-	y = d(gen);
-	z = d(gen);
+	x = d(gen); y = d(gen); z = d(gen);
 
 	dis = sqrt(square(x) + square(y) + square(z));
 
@@ -55,9 +51,7 @@ static void generate_single_point(const u64 *seed_value, Point *p) {
 		dis = 1; 
 	}
 
-	x /= dis;
-	y /= dis;
-	z /= dis;
+	x /= dis; y /= dis; z /= dis;
 
 	// Get latitude/longitude value
 	p->x = acos(z);
@@ -65,11 +59,11 @@ static void generate_single_point(const u64 *seed_value, Point *p) {
 }
 
 static void generate_points(const u64 *seed_value, const u64 *number, const char *fname) {
-	DoublePoints points[*number];
+	PointPairs points[*number];
 
+	Point p1, p2;
 	for (u64 i = 0; i < *number; ++i) {
-		Point p1; Point p2; DoublePoints p;
-
+		PointPairs p;
 		generate_single_point(seed_value, &p1);
 		generate_single_point(seed_value, &p2);
 
