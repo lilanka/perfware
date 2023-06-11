@@ -4,6 +4,7 @@
 
 typedef uint32_t u32;
 typedef uint64_t u64;
+typedef double f64;
 
 #define Array_Count(array) (sizeof(array) / sizeof((array)[0]))
 
@@ -13,7 +14,7 @@ struct Memory {
 
 enum class ParsingResult {
 	Success,
-	Error
+	Parsing_Error
 };
 
 enum class TokenType {
@@ -41,4 +42,8 @@ struct Scanner {
 	char *start;
 	char *current;
 	std::size_t line;
+};
+
+struct PointPairs {
+	f64 x0, y0, x1, y1;
 };

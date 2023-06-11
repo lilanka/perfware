@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 #include "haversine.h"
 #include "debug.cc"
@@ -65,6 +66,10 @@ static void skip_whitespaces(Scanner *scanner) {
 	}
 }
 
+static bool is_end(Scanner *scanner) {
+	return *scanner->current == '\0';
+}
+
 static Token number(Scanner *scanner) {
 	while (is_range(next_char(scanner), '0', '9') || next_char(scanner) == '.')
 		advance(scanner);
@@ -81,6 +86,8 @@ static Token tokenize(Scanner *scanner) {
 	skip_whitespaces(scanner);
 	scanner->start = scanner->current;
 
+	if (is_end(scanner)) return create_token(TokenType::EoF, scanner);
+	
 	char c = advance(scanner);
 
 	if (is_range(c, '0', '9')) {
@@ -107,16 +114,50 @@ static ParsingResult JSON_parse(const char *fname) {
 	Scanner scanner;
 	init_scanner(&scanner, memory);
 
+	std::vector<Token> tokens;	
+
 	// Tokenize
 	while (true) {
 		Token token = tokenize(&scanner);
-
-		debug_tokens(token);
+		//debug_tokens(token);
+		tokens.push_back(token);
 
 		if (token.type == TokenType::EoF) {
-			return ParsingResult::Success;
+			break;	
 		}
 	}
+
+	// Validate JSON
+	u64 n_tokens = tokens.size();
+
+	// Check validity of starting and ending sequence
+	if (tokens[0].type != TokenType::Left_Brace || tokens[n_tokens-2].type != TokenType::Right_Brace || \
+			tokens[3].type != TokenType::Left_Bracket || tokens[n_tokens-3].type != TokenType::Right_Bracket || \
+			tokens[2].type != TokenType::Colon || tokens[n_tokens-4].type != TokenType::Right_Brace)
+		return ParsingResult::Parsing_Error;
+
+	bool found_left_bracket = false;
+	u32 found_where = 0;
+	// Create the array of points while parsing
+	for (u64 tok_idx = 4; tok_idx < n_tokens-4; ++tok_idx) {
+		if (tokens[tok_idx].type == TokenType::Left_Brace) {
+			found_left_bracket = true;
+			found_where = tok_idx;
+
+		} else if (tokens[tok_idx].type == TokenType::Right_Brace) {
+			if (found_left_bracket) {
+				found_left_bracket = false;
+
+				for (u32 inner = found_where; inner < tok_idx; ++inner) {
+					// TODO (Lilanka): Too tired today!
+				}
+
+			} else {
+				return ParsingResult::Parsing_Error;
+			}
+		}
+	}	
+	
 	return ParsingResult::Success;
 }
 
