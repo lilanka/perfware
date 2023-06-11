@@ -66,11 +66,8 @@ static void skip_whitespaces(Scanner *scanner) {
 }
 
 static Token number(Scanner *scanner) {
-	while (is_range(next_char(scanner), '0', '9')) advance(scanner);
-	if (next_char(scanner) == '.' && is_range(next_next_char(scanner), '0', '9')) {
+	while (is_range(next_char(scanner), '0', '9') || next_char(scanner) == '.')
 		advance(scanner);
-		while (is_range(next_char(scanner), '0', '9')) advance(scanner);
-	}
 	return create_token(TokenType::Number, scanner);
 }
 
