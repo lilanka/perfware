@@ -8,7 +8,7 @@
       "type": "lldb",
       "request": "launch",
       "name": "Debug",
-      "program": "${workspaceFolder}/generate_haversine_inputs",
+      "program": "${workspaceFolder}/parser",
       "args": [],
       "cwd": "${workspaceFolder}"
     }
