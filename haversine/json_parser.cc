@@ -21,7 +21,17 @@ enum TokenType {
 	Tok_LeftBracket,
 	Tok_RightBracket,
 	Tok_String,
-	Tok_EoF
+	Tok_EoF,
+
+	Tok_Count
+};
+
+enum ParserState {
+	State_Group,
+	State_String,
+	State_Comma,
+
+	State_Count
 };
 
 struct Token {
@@ -35,6 +45,13 @@ struct Points {
 struct Buffer {
 	size_t count;
 	u8 *data;
+};
+
+struct Parser {
+	Token previous;
+	Token current;
+
+	ParserState state;
 };
 
 static Buffer AllocateBuffer(size_t count) {
@@ -106,7 +123,7 @@ static Token String(Buffer *buffer) {
 }
 
 static Token Number(Buffer *buffer) {
-	while (IsNumber(CurrentChar(buffer)) || CurrentChar(buffer) == '.') {
+	while (IsNumber(CurrentChar(buffer)) || CurrentChar(buffer) == '.' || CurrentChar(buffer) == '-') {
 		Advance(buffer);
 	}
 	return CreateToken(Tok_Number);
@@ -115,11 +132,11 @@ static Token Number(Buffer *buffer) {
 static void HandleWhitespaces(Buffer *buffer) {
 	while (true) {
 		switch (CurrentChar(buffer)) {
-		case ' ':
-		case '\r': 
-		case '\t': Advance(buffer); break;
-		case '\n': Advance(buffer); break; // TODO (lilanka): Add token line number increment
-		default: return;	
+			case ' ':
+			case '\r': 
+			case '\t': Advance(buffer); break;
+			case '\n': Advance(buffer); break; // TODO (lilanka): Add token line number increment
+			default: return;	
 		}
 	}
 }
@@ -131,31 +148,87 @@ static Token Tokenize(Buffer *buffer) {
 	
 	char c = Advance(buffer);
 
-	if (IsNumber(c)) return Number(buffer); 
+	if (IsNumber(c) || c == '-') return Number(buffer); 
 
 	switch (c) {
-	case ',': return CreateToken(Tok_Comma);
-	case ':': return CreateToken(Tok_Colon);
-	case '\'': return String(buffer);
-	case '{': return CreateToken(Tok_LeftBrace);
-	case '}': return CreateToken(Tok_RightBrace);
-	case '[': return CreateToken(Tok_LeftBracket);
-	case ']': return CreateToken(Tok_RightBracket);
+		case ',': return CreateToken(Tok_Comma);
+		case ':': return CreateToken(Tok_Colon);
+		case '\'': return String(buffer);
+		case '{': return CreateToken(Tok_LeftBrace);
+		case '}': return CreateToken(Tok_RightBrace);
+		case '[': return CreateToken(Tok_LeftBracket);
+		case ']': return CreateToken(Tok_RightBracket);
 	}
 
 	return CreateToken(Tok_Invalid); 
 }
 
+static const char* TokenName(TokenType type) {
+	switch (type) {
+		case Tok_LeftBracket: return "{";
+		case Tok_RightBracket: return "}";
+		case Tok_LeftBrace: return "[";
+		case Tok_RightBrace: return "]";
+	}
+}
+
+static b32 String(Buffer *buffer, Parser *parser);
+static b32 Grouping(Buffer *buffer, Parser *parser, TokenType should_be_type);
+
+static b32 String(Buffer *buffer, Parser *parser) {
+	parser->state = State_String;
+	parser->current = Tokenize(buffer);
+	if (parser->current.type == Tok_Colon) {
+		parser->previous = parser->current;
+		parser->current = Tokenize(buffer);
+		if (parser->current.type == Tok_Number) {
+			parser->previous = parser->current;
+			return 1;
+		} else if (parser->current.type == Tok_LeftBracket) {
+			parser->previous = parser->current;
+			return Grouping(buffer, parser, Tok_RightBracket);
+		}
+	}
+	return 0;
+}
+
+static b32 Comma(Buffer *buffer, Parser *parser) {
+	if (parser->state == State_Group || parser->state == State_String) return 1;
+	return 0;
+}
+
+static b32 Grouping(Buffer *buffer, Parser *parser, const TokenType should_be_type) {
+	parser->state = State_Group;
+	while (true) {
+		parser->current = Tokenize(buffer);
+		if (parser->current.type == should_be_type) {
+			parser->previous = parser->current;
+			return 1;
+		}
+		else if (parser->current.type == Tok_String) {
+			String(buffer, parser);
+		} else if (parser->current.type == Tok_LeftBrace) {
+			Grouping(buffer, parser, Tok_RightBrace);
+		} else if (parser->current.type == Tok_Comma) {
+			parser->previous = parser->current;
+			Comma(buffer, parser);
+		}
+	}
+	printf("There should be matching %s\n", TokenName(should_be_type));
+	return 0;
+}
+
 static void ParseJSON(const char *fname, const u64 number_of_point_pairs) {
 	Buffer input_data = ReadJSONFile(fname);
 	Points points[number_of_point_pairs];
+	Parser parser = {};
 
 	while (true) {
-		Token token = Tokenize(&input_data);
-
-		printf("%d\n", token.type);
-
-		if (token.type == Tok_EoF) break;
+		parser.previous = Tokenize(&input_data);
+		
+		if (parser.previous.type == Tok_LeftBrace) {
+			Grouping(&input_data, &parser, Tok_RightBrace);
+		} else if (parser.previous.type == Tok_EoF) break;
 	}
 }
 
@@ -164,6 +237,7 @@ int main(int argc, char **args) {
 	const u64 number_of_point_pairs = 100000;
 	const char *fname = "haversine_points.json";
 	ParseJSON(fname, number_of_point_pairs);
+
 	/* NOTE (lilanka): This is working just ignore it while building
 	if (argc > 1) {
 		ParseJSON(args[1]);	
