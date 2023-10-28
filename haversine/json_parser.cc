@@ -26,6 +26,8 @@ enum TokenType {
 	Tok_Count
 };
 
+// NOTE (lilanka): In JSON states, Group is considered as whatever inside {}, []. 
+// String is considered as the whole part of 'x': <whatever here>. You know Comma
 enum ParserState {
 	State_Group,
 	State_String,
@@ -34,6 +36,7 @@ enum ParserState {
 	State_Count
 };
 
+// TODO (lilanka): Add other information (token name, line number, etc) 
 struct Token {
 	TokenType type;
 };
@@ -47,9 +50,9 @@ struct Buffer {
 	u8 *data;
 };
 
+// TODO (lilanka): Do we really need previous token? We have previous State. Look that up.
 struct Parser {
-	Token previous;
-	Token current;
+	Token token;
 
 	ParserState state;
 };
@@ -98,7 +101,7 @@ static char Advance(Buffer *buffer) {
 	return buffer->data[-1];
 }
 
-static char CurrentChar(Buffer *buffer) {
+static char tokenChar(Buffer *buffer) {
 	return *(buffer->data);
 }
 
@@ -122,8 +125,13 @@ static Token String(Buffer *buffer) {
 	return CreateToken(Tok_String);
 }
 
+static Token Nan(Buffer *buffer) {
+	while (Advance(buffer) != ' ') {}
+	return CreateToken(Tok_Nan);
+}
+
 static Token Number(Buffer *buffer) {
-	while (IsNumber(CurrentChar(buffer)) || CurrentChar(buffer) == '.' || CurrentChar(buffer) == '-') {
+	while (IsNumber(tokenChar(buffer)) || tokenChar(buffer) == '.' || tokenChar(buffer) == '-') {
 		Advance(buffer);
 	}
 	return CreateToken(Tok_Number);
@@ -131,7 +139,7 @@ static Token Number(Buffer *buffer) {
 
 static void HandleWhitespaces(Buffer *buffer) {
 	while (true) {
-		switch (CurrentChar(buffer)) {
+		switch (tokenChar(buffer)) {
 			case ' ':
 			case '\r': 
 			case '\t': Advance(buffer); break;
@@ -149,6 +157,9 @@ static Token Tokenize(Buffer *buffer) {
 	char c = Advance(buffer);
 
 	if (IsNumber(c) || c == '-') return Number(buffer); 
+
+	// NOTE (lilanka): Don't know if nan is allowed in JSON at all
+	if (c == 'n') { return Nan(buffer); } 
 
 	switch (c) {
 		case ',': return CreateToken(Tok_Comma);
@@ -177,45 +188,51 @@ static b32 Grouping(Buffer *buffer, Parser *parser, TokenType should_be_type);
 
 static b32 String(Buffer *buffer, Parser *parser) {
 	parser->state = State_String;
-	parser->current = Tokenize(buffer);
-	if (parser->current.type == Tok_Colon) {
-		parser->previous = parser->current;
-		parser->current = Tokenize(buffer);
-		if (parser->current.type == Tok_Number) {
-			parser->previous = parser->current;
+	parser->token = Tokenize(buffer);
+	if (parser->token.type == Tok_Colon) {
+		parser->token = Tokenize(buffer);
+		if (parser->token.type == Tok_Number) {
 			return 1;
-		} else if (parser->current.type == Tok_LeftBracket) {
-			parser->previous = parser->current;
+		} else if (parser->token.type == Tok_LeftBracket) {
 			return Grouping(buffer, parser, Tok_RightBracket);
+		} else if (parser->token.type == Tok_Nan) {
+			return 1;
 		}
 	}
 	return 0;
 }
 
 static b32 Comma(Buffer *buffer, Parser *parser) {
-	if (parser->state == State_Group || parser->state == State_String) return 1;
+	if (parser->state == State_Group || parser->state == State_String) {
+		parser->state = State_Comma;
+		return 1;
+	}
+	parser->state = State_Comma;
 	return 0;
 }
 
 static b32 Grouping(Buffer *buffer, Parser *parser, const TokenType should_be_type) {
 	parser->state = State_Group;
 	while (true) {
-		parser->current = Tokenize(buffer);
-		if (parser->current.type == should_be_type) {
-			parser->previous = parser->current;
+		parser->token = Tokenize(buffer);
+		if (parser->token.type == should_be_type) {
+			if (parser->state == State_Comma) {
+				printf("A comma should't be there\n");
+				return 0;
+			}
 			return 1;
 		}
-		else if (parser->current.type == Tok_String) {
+		else if (parser->token.type == Tok_String) {
 			String(buffer, parser);
-		} else if (parser->current.type == Tok_LeftBrace) {
+		} else if (parser->token.type == Tok_LeftBrace) {
 			Grouping(buffer, parser, Tok_RightBrace);
-		} else if (parser->current.type == Tok_Comma) {
-			parser->previous = parser->current;
+		} else if (parser->token.type == Tok_Comma) {
 			Comma(buffer, parser);
+		} else {
+			printf("There should be matching %s\n", TokenName(should_be_type));
+			return 0;
 		}
 	}
-	printf("There should be matching %s\n", TokenName(should_be_type));
-	return 0;
 }
 
 static void ParseJSON(const char *fname, const u64 number_of_point_pairs) {
@@ -224,11 +241,11 @@ static void ParseJSON(const char *fname, const u64 number_of_point_pairs) {
 	Parser parser = {};
 
 	while (true) {
-		parser.previous = Tokenize(&input_data);
+		Token token = Tokenize(&input_data);
 		
-		if (parser.previous.type == Tok_LeftBrace) {
+		if (token.type == Tok_LeftBrace) {
 			Grouping(&input_data, &parser, Tok_RightBrace);
-		} else if (parser.previous.type == Tok_EoF) break;
+		} else if (token.type == Tok_EoF) break;
 	}
 }
 
